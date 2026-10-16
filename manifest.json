@@ -1,0 +1,24 @@
+{
+  "name": "Pin Sheet Maker",
+  "short_name": "Pin Maker",
+  "description": "Create printable 32mm and 58mm pin button sheets on letter paper",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#e8e8e8",
+  "theme_color": "#2563eb",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

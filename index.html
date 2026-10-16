@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Pin Maker">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>Pin Sheet Maker – 32mm / 58mm</title>
+  <style>
+    :root {
+      --paper-w: 8.5in;
+      --paper-h: 11in;
+      --margin: 0.18in; /* tight but safe; ensures 58mm pins fit */
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #e8e8e8;
+      color: #222;
+      line-height: 1.4;
+      min-height: 100vh;
+    }
+
+    /* ========== CONTROLS (screen only) ========== */
+    .controls {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.25rem 1.5rem;
+      background: #fff;
+      border-bottom: 1px solid #ddd;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .controls h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .controls h1 span {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #666;
+      background: #f0f0f0;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .size-toggle {
+      display: flex;
+      background: #f0f0f0;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #ccc;
+    }
+
+    .size-toggle button {
+      border: none;
+      background: transparent;
+      padding: 0.55rem 1.1rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .size-toggle button.active {
+      background: #2563eb;
+      color: #fff;
+    }
+
+    .size-toggle button:hover:not(.active) {
+      background: #e0e0e0;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-primary {
+      background: #2563eb;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #1d4ed8; }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+      border: 1px solid #ccc;
+    }
+    .btn-secondary:hover { background: #e5e5e5; }
+
+    .btn-danger {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fca5a5;
+    }
+    .btn-danger:hover { background: #fecaca; }
+
+    .info {
+      font-size: 0.85rem;
+      color: #555;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 0.6rem 0.9rem;
+      flex: 1;
+      min-width: 220px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      font-size: 0.8rem;
+      color: #555;
+      margin-top: 0.5rem;
+    }
+
+    .legend span {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .legend .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid;
+    }
+
+    .swatch.cut { border-color: #000; background: transparent; }
+    .swatch.face { border-color: #2563eb; border-style: dashed; background: transparent; }
+    .swatch.safe { border-color: #16a34a; border-style: dotted; background: transparent; }
+
+    /* ========== PAPER PREVIEW ========== */
+    .workspace {
+      display: flex;
+      justify-content: center;
+      padding: 1.5rem;
+      overflow: auto;
+      /* allow the paper to be fully visible without being cut off */
+    }
+
+    .paper {
+      width: var(--paper-w);
+      height: var(--paper-h);
+      background: #fff;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .pin-grid {
+      position: absolute;
+      inset: var(--margin);
+      display: grid;
+      width: calc(100% - 2 * var(--margin));
+      height: calc(100% - 2 * var(--margin));
+      place-items: center; /* center each pin in its cell so the sheet looks evenly filled */
+    }
+
+    .pin-grid.size-32 {
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(5, 1fr);
+      gap: 0.08in;
+    }
+
+    .pin-grid.size-58 {
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 0.08in;
+    }
+
+    .pin-slot {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .pin-circle {
+      position: relative;
+      border-radius: 50%;
+      overflow: hidden;
+      background: #f1f5f9;
+      border: 1.5px solid #000;
+      transition: box-shadow 0.15s;
+    }
+
+    .pin-slot:hover .pin-circle {
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35);
+    }
+
+    .pin-slot.has-image .pin-circle {
+      background: #fff;
+    }
+
+    /* Standard cut diameters used by most button makers */
+    .size-32 .pin-circle {
+      width: 1.629in;   /* ~41.4 mm – common cut size for 1.25"/32 mm pins */
+      height: 1.629in;
+    }
+
+    .size-58 .pin-circle {
+      width: 2.625in;   /* 66.7 mm – common cut size for 2.25"/58 mm pins */
+      height: 2.625in;
+    }
+
+    .pin-circle img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      pointer-events: none;
+    }
+
+    .guide-face,
+    .guide-safe {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .guide-face {
+      border: 1.5px dashed #2563eb;
+    }
+
+    .guide-safe {
+      border: 1.5px dotted #16a34a;
+    }
+
+    .size-32 .guide-face {
+      width: 1.25in;     /* finished 32 mm / 1.25" */
+      height: 1.25in;
+    }
+    .size-32 .guide-safe {
+      width: 1.10in;     /* safe area */
+      height: 1.10in;
+    }
+
+    .size-58 .guide-face {
+      width: 2.25in;     /* finished 58 mm / 2.25" */
+      height: 2.25in;
+    }
+    .size-58 .guide-safe {
+      width: 2.05in;     /* safe area */
+      height: 2.05in;
+    }
+
+    .pin-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      text-align: center;
+      pointer-events: none;
+      padding: 0.3rem;
+    }
+
+    .pin-placeholder svg {
+      width: 28%;
+      height: auto;
+      margin-bottom: 0.25rem;
+      opacity: 0.6;
+    }
+
+    .pin-slot.has-image .pin-placeholder {
+      display: none;
+    }
+
+    .pin-actions {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      display: none;
+      gap: 4px;
+      z-index: 5;
+    }
+
+    .pin-slot.has-image:hover .pin-actions {
+      display: flex;
+    }
+
+    .pin-action-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      border: none;
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pin-action-btn:hover {
+      background: #2563eb;
+    }
+
+    .pin-action-btn.remove:hover {
+      background: #dc2626;
+    }
+
+    /* ========== CROP MODAL ========== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal {
+      background: #fff;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 640px;
+      max-height: 92vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-header h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: #f3f4f6;
+      border-radius: 6px;
+      font-size: 1.25rem;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .modal-close:hover {
+      background: #e5e7eb;
+    }
+
+    .modal-body {
+      padding: 1rem 1.25rem;
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .crop-viewport {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      max-height: 420px;
+      min-height: 280px;
+      background: #1a1a1a;
+      border-radius: 8px;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .crop-viewport canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+
+    .crop-viewport canvas.dragging {
+      cursor: grabbing;
+    }
+
+    /* Circular mask overlay using CSS */
+    .crop-mask {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(
+        circle closest-side,
+        transparent 0%,
+        transparent 49.5%,
+        rgba(0,0,0,0.55) 50.5%
+      );
+    }
+
+    /* Guide rings inside the cropper */
+    .crop-guide-face,
+    .crop-guide-safe {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .crop-guide-face {
+      border: 2px dashed rgba(37, 99, 235, 0.9);
+      width: 76.4%;   /* 32/42 ≈ 76% ; 58/67 ≈ 86%  – we'll set dynamically */
+      height: 76.4%;
+    }
+
+    .crop-guide-safe {
+      border: 2px dotted rgba(22, 163, 74, 0.9);
+      width: 66.7%;
+      height: 66.7%;
+    }
+
+    .crop-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .control-row label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      min-width: 60px;
+    }
+
+    .control-row input[type="range"] {
+      flex: 1;
+      accent-color: #2563eb;
+    }
+
+    .zoom-value {
+      font-size: 0.85rem;
+      color: #555;
+      min-width: 48px;
+      text-align: right;
+    }
+
+    .modal-footer {
+      padding: 1rem 1.25rem;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
+
+    .hint {
+      font-size: 0.8rem;
+      color: #6b7280;
+      text-align: center;
+    }
+
+    /* ========== PRINT STYLES ========== */
+    @media print {
+      @page {
+        size: letter;
+        margin: 0;
+      }
+
+      body {
+        background: #fff;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      .controls,
+      .no-print,
+      .modal-overlay {
+        display: none !important;
+      }
+
+      .workspace {
+        padding: 0;
+        margin: 0;
+      }
+
+      .paper {
+        box-shadow: none;
+        width: 8.5in;
+        height: 11in;
+        margin: 0;
+        page-break-after: always;
+      }
+
+      .guide-face,
+      .guide-safe,
+      .pin-placeholder,
+      .pin-actions {
+        display: none !important;
+      }
+
+      .pin-circle {
+        border: 0.5pt solid #333;
+        box-shadow: none !important;
+      }
+
+      .pin-slot:hover .pin-circle {
+        box-shadow: none;
+      }
+    }
+
+    /* Scale the paper preview so it never gets cut off on smaller screens */
+    @media screen and (max-width: 920px) {
+      .paper {
+        transform: scale(0.85);
+        transform-origin: top center;
+      }
+      .workspace {
+        /* compensate for the visual height after scale */
+        min-height: calc(11in * 0.85 + 3rem);
+        padding-bottom: 2rem;
+      }
+    }
+
+    @media screen and (max-width: 780px) {
+      .paper {
+        transform: scale(0.7);
+      }
+      .workspace {
+        min-height: calc(11in * 0.7 + 3rem);
+      }
+    }
+
+    @media screen and (max-width: 640px) {
+      .paper {
+        transform: scale(0.55);
+      }
+      .workspace {
+        min-height: calc(11in * 0.55 + 3rem);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="controls no-print">
+    <h1>
+      Pin Sheet Maker
+      <span>Letter 8.5 × 11 in</span>
+    </h1>
+
+    <div class="row">
+      <div class="size-toggle" role="group" aria-label="Pin size">
+        <button type="button" id="btn-32" class="active" data-size="32">32 mm (1.25″)</button>
+        <button type="button" id="btn-58" data-size="58">58 mm (2.25″)</button>
+      </div>
+
+      <button type="button" class="btn btn-primary" id="btn-print">Print Sheet</button>
+      <button type="button" class="btn btn-secondary" id="btn-clear">Clear All</button>
+    </div>
+
+    <div class="row">
+      <div class="info" id="info-text">
+        <strong>32 mm pins</strong> — 20 per sheet (4 × 5).  
+        Click any circle to upload &amp; crop a photo.  
+        Outer black = cut · Blue dashed = face · Green dotted = safe area.
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><span class="swatch cut"></span> Cut line (paper edge)</span>
+      <span><span class="swatch face"></span> Finished face (visible)</span>
+      <span><span class="swatch safe"></span> Safe area (keep text/important art here)</span>
+    </div>
+  </div>
+
+  <div class="workspace">
+    <div class="paper" id="paper">
+      <div class="pin-grid size-32" id="pin-grid"></div>
+    </div>
+  </div>
+
+  <!-- Hidden file input -->
+  <input type="file" id="file-input" accept="image/*" style="display:none">
+
+  <!-- Crop Modal -->
+  <div class="modal-overlay no-print" id="crop-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Crop &amp; Position Image</h2>
+        <button type="button" class="modal-close" id="modal-close" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="crop-viewport" id="crop-viewport">
+          <canvas id="crop-canvas"></canvas>
+          <div class="crop-mask"></div>
+          <div class="crop-guide-face" id="crop-guide-face"></div>
+          <div class="crop-guide-safe" id="crop-guide-safe"></div>
+        </div>
+
+        <div class="crop-controls">
+          <div class="control-row">
+            <label for="zoom-slider">Zoom</label>
+            <input type="range" id="zoom-slider" min="10" max="400" value="100" step="1">
+            <span class="zoom-value" id="zoom-value">100%</span>
+          </div>
+          <div class="control-row" style="justify-content: center; gap: 0.5rem;">
+            <button type="button" class="btn btn-secondary" id="btn-reset-view">Reset View</button>
+            <button type="button" class="btn btn-secondary" id="btn-fit">Fit</button>
+            <button type="button" class="btn btn-secondary" id="btn-fill">Fill</button>
+          </div>
+        </div>
+
+        <p class="hint">
+          Photo starts filling the whole pin. Drag to reposition · Scroll / slider to zoom ·  
+          Use <strong>Fit</strong> if you need to see the entire photo · Keep important content inside the green safe area.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-replace-photo" style="margin-right:auto;">Replace Photo</button>
+        <button type="button" class="btn btn-secondary" id="btn-cancel-crop">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-apply-crop">Apply to Pin</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========== CONFIG ==========
+    const CONFIG = {
+      32: {
+        count: 20,
+        cols: 4,
+        rows: 5,
+        cutMm: 41.4,    // 1.629" standard cut for 1.25"/32 mm
+        faceMm: 32,
+        safeMm: 28,
+        label: "32 mm (1.25″)",
+        info: `<strong>32 mm pins</strong> — 20 per full letter sheet (4 × 5).  
+               Click any circle to upload &amp; crop a photo.  
+               Outer black = cut · Blue dashed = face · Green dotted = safe area.`
+      },
+      58: {
+        count: 9,
+        cols: 3,
+        rows: 3,
+        cutMm: 66.7,    // 2.625" standard cut for 2.25"/58 mm
+        faceMm: 58,
+        safeMm: 52,
+        label: "58 mm (2.25″)",
+        info: `<strong>58 mm pins</strong> — 9 per full letter sheet (3 × 3).  
+               Click any circle to upload &amp; crop a photo.  
+               Outer black = cut · Blue dashed = face · Green dotted = safe area.`
+      }
+    };
+
+    // Output resolution for the final circular image (pixels across diameter)
+    const OUTPUT_PX = 800;
+
+    let currentSize = 32;
+    let activeSlotIndex = null;
+    const images = {};          // slotIndex -> final dataURL (already cropped)
+    const originalImages = {};  // slotIndex -> original dataURL (for re-editing)
+
+    // Cropper state
+    let cropImg = null;         // HTMLImageElement
+    let scale = 1;
+    let offsetX = 0;
+    let offsetY = 0;
+    let isDragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    let viewportSize = 0;
+
+    // DOM refs
+    const gridEl = document.getElementById("pin-grid");
+    const fileInput = document.getElementById("file-input");
+    const infoText = document.getElementById("info-text");
+    const btn32 = document.getElementById("btn-32");
+    const btn58 = document.getElementById("btn-58");
+    const cropModal = document.getElementById("crop-modal");
+    const cropCanvas = document.getElementById("crop-canvas");
+    const cropViewport = document.getElementById("crop-viewport");
+    const zoomSlider = document.getElementById("zoom-slider");
+    const zoomValue = document.getElementById("zoom-value");
+    const guideFace = document.getElementById("crop-guide-face");
+    const guideSafe = document.getElementById("crop-guide-safe");
+    const ctx = cropCanvas.getContext("2d");
+
+    // ========== GRID ==========
+    function buildGrid() {
+      const cfg = CONFIG[currentSize];
+      gridEl.className = `pin-grid size-${currentSize}`;
+      gridEl.innerHTML = "";
+
+      for (let i = 0; i < cfg.count; i++) {
+        const slot = document.createElement("div");
+        slot.className = "pin-slot" + (images[i] ? " has-image" : "");
+        slot.dataset.index = i;
+
+        const circle = document.createElement("div");
+        circle.className = "pin-circle";
+
+        const face = document.createElement("div");
+        face.className = "guide-face";
+        const safe = document.createElement("div");
+        safe.className = "guide-safe";
+
+        const placeholder = document.createElement("div");
+        placeholder.className = "pin-placeholder";
+        placeholder.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+          Click to add photo
+        `;
+
+        if (images[i]) {
+          const img = document.createElement("img");
+          img.src = images[i];
+          img.alt = `Pin ${i + 1}`;
+          circle.appendChild(img);
+        }
+
+        // Actions (edit + replace + remove)
+        const actions = document.createElement("div");
+        actions.className = "pin-actions";
+
+        const editBtn = document.createElement("button");
+        editBtn.className = "pin-action-btn";
+        editBtn.type = "button";
+        editBtn.title = "Edit / re-crop";
+        editBtn.innerHTML = "✎";
+        editBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          activeSlotIndex = i;
+          if (originalImages[i]) {
+            openCropper(originalImages[i]);
+          } else if (images[i]) {
+            openCropper(images[i]);
+          }
+        });
+
+        const replaceBtn = document.createElement("button");
+        replaceBtn.className = "pin-action-btn";
+        replaceBtn.type = "button";
+        replaceBtn.title = "Replace with a different photo";
+        replaceBtn.innerHTML = "↺";
+        replaceBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          activeSlotIndex = i;
+          fileInput.value = "";
+          fileInput.click();
+        });
+
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "pin-action-btn remove";
+        removeBtn.type = "button";
+        removeBtn.title = "Remove photo";
+        removeBtn.innerHTML = "×";
+        removeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          delete images[i];
+          delete originalImages[i];
+          buildGrid();
+        });
+
+        actions.appendChild(editBtn);
+        actions.appendChild(replaceBtn);
+        actions.appendChild(removeBtn);
+
+        circle.appendChild(face);
+        circle.appendChild(safe);
+        circle.appendChild(placeholder);
+        circle.appendChild(actions);
+        slot.appendChild(circle);
+
+        slot.addEventListener("click", () => {
+          activeSlotIndex = i;
+          if (images[i] && originalImages[i]) {
+            // Re-open cropper with original
+            openCropper(originalImages[i]);
+          } else {
+            fileInput.value = "";
+            fileInput.click();
+          }
+        });
+
+        gridEl.appendChild(slot);
+      }
+
+      infoText.innerHTML = cfg.info;
+    }
+
+    // ========== SIZE TOGGLE ==========
+    function setSize(size) {
+      if (size === currentSize) return;
+      currentSize = size;
+      const newCount = CONFIG[size].count;
+      for (let k of Object.keys(images)) {
+        if (parseInt(k) >= newCount) {
+          delete images[k];
+          delete originalImages[k];
+        }
+      }
+      btn32.classList.toggle("active", size === 32);
+      btn58.classList.toggle("active", size === 58);
+      buildGrid();
+    }
+
+    btn32.addEventListener("click", () => setSize(32));
+    btn58.addEventListener("click", () => setSize(58));
+
+    // ========== FILE UPLOAD ==========
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file || activeSlotIndex === null) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target.result;
+        originalImages[activeSlotIndex] = dataUrl;
+        openCropper(dataUrl);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // ========== CROPPER ==========
+    function openCropper(dataUrl) {
+      cropImg = new Image();
+      cropImg.onload = () => {
+        // Set guide sizes relative to cut diameter
+        const cfg = CONFIG[currentSize];
+        const facePct = (cfg.faceMm / cfg.cutMm) * 100;
+        const safePct = (cfg.safeMm / cfg.cutMm) * 100;
+        guideFace.style.width = guideFace.style.height = facePct + "%";
+        guideSafe.style.width = guideSafe.style.height = safePct + "%";
+
+        // Open modal FIRST so layout has real dimensions, then size & draw
+        cropModal.classList.add("open");
+
+        // Double rAF ensures the browser has painted the modal and we get a real size
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            // Default to FILL so the photo covers the whole pin circle
+            resetView(false);
+          });
+        });
+      };
+      cropImg.onerror = () => {
+        alert("Could not load that image. Please try another file.");
+        closeCropper();
+      };
+      cropImg.src = dataUrl;
+    }
+
+    function closeCropper() {
+      cropModal.classList.remove("open");
+      cropImg = null;
+      isDragging = false;
+    }
+
+    function getViewportSize() {
+      const rect = cropViewport.getBoundingClientRect();
+      // Fallback so we never get 0 (which causes the black canvas)
+      const size = Math.min(rect.width, rect.height);
+      return size > 10 ? size : 400;
+    }
+
+    function resetView(fit = false) {
+      if (!cropImg) return;
+      viewportSize = getViewportSize();
+      cropCanvas.width = viewportSize;
+      cropCanvas.height = viewportSize;
+
+      const imgW = cropImg.naturalWidth || 1;
+      const imgH = cropImg.naturalHeight || 1;
+
+      if (fit) {
+        // Fit entire image inside the circle
+        scale = Math.min(viewportSize / imgW, viewportSize / imgH) * 0.95;
+      } else {
+        // FILL the circle (cover) – this is what we want by default
+        scale = Math.max(viewportSize / imgW, viewportSize / imgH);
+      }
+
+      offsetX = (viewportSize - imgW * scale) / 2;
+      offsetY = (viewportSize - imgH * scale) / 2;
+
+      updateZoomUI();
+      drawCropper();
+    }
+
+    function updateZoomUI() {
+      if (!cropImg || viewportSize < 10) return;
+      const fillScale = Math.max(
+        viewportSize / (cropImg.naturalWidth || 1),
+        viewportSize / (cropImg.naturalHeight || 1)
+      );
+      const pct = Math.round((scale / fillScale) * 100);
+      zoomSlider.value = Math.min(400, Math.max(10, pct));
+      zoomValue.textContent = pct + "%";
+    }
+
+    function drawCropper() {
+      if (!cropImg || !ctx) return;
+      viewportSize = getViewportSize();
+      if (cropCanvas.width !== viewportSize || cropCanvas.height !== viewportSize) {
+        cropCanvas.width = viewportSize;
+        cropCanvas.height = viewportSize;
+      }
+
+      // Dark background
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(0, 0, viewportSize, viewportSize);
+
+      // Draw the image so it fills the circular area
+      ctx.drawImage(
+        cropImg,
+        offsetX,
+        offsetY,
+        cropImg.naturalWidth * scale,
+        cropImg.naturalHeight * scale
+      );
+    }
+
+    // Zoom slider
+    zoomSlider.addEventListener("input", () => {
+      if (!cropImg) return;
+      const fillScale = Math.max(viewportSize / cropImg.naturalWidth, viewportSize / cropImg.naturalHeight);
+      const newScale = (parseFloat(zoomSlider.value) / 100) * fillScale;
+
+      // Zoom around center of viewport
+      const cx = viewportSize / 2;
+      const cy = viewportSize / 2;
+      const imgCx = (cx - offsetX) / scale;
+      const imgCy = (cy - offsetY) / scale;
+
+      scale = newScale;
+      offsetX = cx - imgCx * scale;
+      offsetY = cy - imgCy * scale;
+
+      zoomValue.textContent = zoomSlider.value + "%";
+      drawCropper();
+    });
+
+    // Mouse wheel zoom
+    cropViewport.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      if (!cropImg) return;
+
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      const fillScale = Math.max(viewportSize / cropImg.naturalWidth, viewportSize / cropImg.naturalHeight);
+      let newScale = scale * delta;
+      newScale = Math.max(fillScale * 0.1, Math.min(fillScale * 4, newScale));
+
+      const rect = cropViewport.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      const imgCx = (mx - offsetX) / scale;
+      const imgCy = (my - offsetY) / scale;
+
+      scale = newScale;
+      offsetX = mx - imgCx * scale;
+      offsetY = my - imgCy * scale;
+
+      updateZoomUI();
+      drawCropper();
+    }, { passive: false });
+
+    // Drag to pan
+    function startDrag(x, y) {
+      isDragging = true;
+      lastX = x;
+      lastY = y;
+      cropCanvas.classList.add("dragging");
+    }
+
+    function moveDrag(x, y) {
+      if (!isDragging) return;
+      offsetX += x - lastX;
+      offsetY += y - lastY;
+      lastX = x;
+      lastY = y;
+      drawCropper();
+    }
+
+    function endDrag() {
+      isDragging = false;
+      cropCanvas.classList.remove("dragging");
+    }
+
+    cropCanvas.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      startDrag(e.clientX, e.clientY);
+    });
+    window.addEventListener("mousemove", (e) => moveDrag(e.clientX, e.clientY));
+    window.addEventListener("mouseup", endDrag);
+
+    // Touch support
+    cropCanvas.addEventListener("touchstart", (e) => {
+      if (e.touches.length === 1) {
+        e.preventDefault();
+        startDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: false });
+    window.addEventListener("touchmove", (e) => {
+      if (isDragging && e.touches.length === 1) {
+        e.preventDefault();
+        moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: false });
+    window.addEventListener("touchend", endDrag);
+
+    // Buttons
+    document.getElementById("btn-reset-view").addEventListener("click", () => resetView(false));
+    document.getElementById("btn-fit").addEventListener("click", () => resetView(true));
+    document.getElementById("btn-fill").addEventListener("click", () => resetView(false));
+
+    document.getElementById("modal-close").addEventListener("click", closeCropper);
+    document.getElementById("btn-cancel-crop").addEventListener("click", closeCropper);
+
+    // Replace photo while in the cropper (pick a different file)
+    document.getElementById("btn-replace-photo").addEventListener("click", () => {
+      fileInput.value = "";
+      fileInput.click();
+    });
+
+    // Apply crop → produce high-res square image that fully fills the pin circle
+    document.getElementById("btn-apply-crop").addEventListener("click", () => {
+      if (!cropImg || activeSlotIndex === null) return;
+      if (viewportSize < 10) viewportSize = getViewportSize();
+
+      const out = document.createElement("canvas");
+      out.width = OUTPUT_PX;
+      out.height = OUTPUT_PX;
+      const octx = out.getContext("2d");
+
+      // White background so any transparent edges print cleanly
+      octx.fillStyle = "#ffffff";
+      octx.fillRect(0, 0, OUTPUT_PX, OUTPUT_PX);
+
+      // Scale factor: viewport pixels → output pixels
+      const s = OUTPUT_PX / viewportSize;
+
+      // Draw the exact region the user sees in the cropper (fills the whole square)
+      // CSS on the pin will clip this square to a perfect circle
+      octx.drawImage(
+        cropImg,
+        offsetX * s,
+        offsetY * s,
+        cropImg.naturalWidth * scale * s,
+        cropImg.naturalHeight * scale * s
+      );
+
+      const dataUrl = out.toDataURL("image/jpeg", 0.92);
+      images[activeSlotIndex] = dataUrl;
+
+      closeCropper();
+      buildGrid();
+    });
+
+    // Clear all
+    document.getElementById("btn-clear").addEventListener("click", () => {
+      if (Object.keys(images).length === 0) return;
+      if (confirm("Remove all photos from this sheet?")) {
+        for (let k of Object.keys(images)) {
+          delete images[k];
+          delete originalImages[k];
+        }
+        buildGrid();
+      }
+    });
+
+    // Print
+    document.getElementById("btn-print").addEventListener("click", () => {
+      window.print();
+    });
+
+    // Handle resize of cropper while open
+    window.addEventListener("resize", () => {
+      if (cropModal.classList.contains("open") && cropImg) {
+        // Preserve relative position roughly
+        const oldSize = viewportSize;
+        viewportSize = getViewportSize();
+        if (oldSize > 0) {
+          const ratio = viewportSize / oldSize;
+          offsetX *= ratio;
+          offsetY *= ratio;
+          scale *= ratio;
+        }
+        drawCropper();
+        updateZoomUI();
+      }
+    });
+
+    // Init
+    buildGrid();
+
+    // Register service worker for offline / installable PWA
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
